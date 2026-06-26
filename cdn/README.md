@@ -16,11 +16,13 @@ all over the private VPC. Replaces Cloudinary. Full design: `../../docs/spec/SPE
 - ✅ web-01 → MinIO `:9000` firewall already open.
 - ✅ **imgproxy read-only user `wiriri_imgproxy_ro`** + policy created (GetObject/ListBucket on images only).
 - ✅ **imgproxy DEPLOYED + VALIDATED** on `10.130.18.7:8080` (`docker-compose.imgproxy.yml`): `/health` 200, signed transform 200, unsigned 403. Keys in `/opt/wiriri/imgproxy.env` (600).
+- ✅ **Firewall** — CloudAxion `:8080 from 10.130.18.3/32` added; web-01 reaches imgproxy + MinIO.
+- ✅ **cdn.wiriri.com nginx vhost LIVE** (`../web-01/nginx/default.conf`): `/img/*`→imgproxy (edge-cached) + presigned passthrough. Validated 2026-06-26: cdn `/img` 200, `X-Cache MISS→HIT`, unsigned 403, other sites unaffected. (proxy_cache is in-container/ephemeral; add a host mount for persistence later.)
 
-## Remaining steps to go live
-1. **[owner] Firewall** — CloudAxion: allow web-01 (`10.130.18.3`) → storage-01 `:8080`.
-2. **[owner] Infisical** — store `IMGPROXY_KEY` / `IMGPROXY_SALT` (from `/opt/wiriri/imgproxy.env`) in all 3 stages; the backend needs them to sign `/img/` URLs.
-3. **nginx** — swap web-01 to `../web-01/nginx/default.conf.cdn-proposed` (adds cache zone + new cdn block), mount `./nginx/cache:/var/cache/nginx`, `nginx -t` then reload. (Do after step 1.)
-4. **Smoke test** — `GET https://cdn.wiriri.com/img/<signed>/rs:fill:400/<src>` → 200 + `X-Cache-Status`; a backend presigned PUT/GET round-trips.
+## Remaining to finish cluster S (app phase)
+1. **[owner] Infisical** — store `IMGPROXY_KEY` / `IMGPROXY_SALT` (from `/opt/wiriri/imgproxy.env`) in all 3 stages; the **backend** needs them to sign `/img/` URLs.
+2. **Backend `StorageModule`** — presign (signed vs `cdn.wiriri.com`), resolver builds `/img/` URLs, ID/KYC proxy, invoice presign. Then the **presigned PUT/GET passthrough** gets its real validation (a backend-minted round-trip).
+3. **webapp uploader** + CSP/remotePatterns/seo → cdn.
+4. **Backfill** property images (dry-run + owner approval), flip, decommission Cloudinary.
 
 > All changes are **read-only-first**: validate `nginx -t` and a throwaway object before flipping app reads.

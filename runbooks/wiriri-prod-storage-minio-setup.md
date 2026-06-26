@@ -719,10 +719,12 @@ Add to the storage firewall (only change needed — `:9000` from web-01 is alrea
 |---|---:|---|---|
 | TCP | `8080` | `10.130.18.3/32` | web-01 edge → imgproxy |
 
-### 22.4 Edge (web-01)
-Apply `wiriri-infra/web-01/nginx/default.conf.cdn-proposed` (replaces the cdn stub: adds the cache
-zone + `/img/*`→imgproxy and presigned `/<bucket>/*`→MinIO passthrough), mount `./nginx/cache`,
-then `nginx -t` and reload. TLS already covers `cdn.wiriri.com` (shared `wiriri.com` SAN cert).
+### 22.4 Edge (web-01) — DONE 2026-06-26
+Applied: `/opt/wiriri/nginx/default.conf` now has the cache zone + cdn vhost (`/img/*`→imgproxy,
+presigned `/<bucket>/*`→MinIO). Canonical copy: `wiriri-infra/web-01/nginx/default.conf`. Previous
+config backed up on-box as `default.conf.bak-<ts>`. `nginx -t` passed, reloaded. Validated: cdn `/img`
+200 (`X-Cache MISS→HIT`), unsigned 403, wiriri/api/admin unaffected. Firewall `:8080 from .3` added.
+(proxy_cache is in-container/ephemeral — add `./nginx/cache:/var/cache/nginx` for persistence later.)
 
 ### 22.5 Upload/read model (aligns the §1 diagram with the spec)
 - **Public images:** backend mints a **presigned PUT** (signed against `https://cdn.wiriri.com`); the
