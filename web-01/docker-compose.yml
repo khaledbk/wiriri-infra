@@ -1,0 +1,58 @@
+# wiriri-prod-web-01 (10.130.18.3) — CURRENT live state (captured 2026-06-26).
+# Edge nginx (only public box: 80/443) + dockerized webapp + admin.
+# For the CDN, also mount a cache dir (see the >>> line) when adopting default.conf.cdn-proposed.
+services:
+  nginx:
+    image: nginx:stable
+    container_name: wiriri-prod-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      # >>> ADD for the CDN cache when using default.conf.cdn-proposed:
+      # - ./nginx/cache:/var/cache/nginx
+    depends_on:
+      - webapp
+    networks:
+      - wiriri_web_internal
+
+  webapp:
+    image: ghcr.io/khaledbk/wiriri-webapp:prod
+    container_name: wiriri-prod-webapp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - wiriri_web_internal
+
+  admin:
+    image: ghcr.io/khaledbk/wiriri-admin:prod
+    container_name: wiriri-prod-admin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3000"
+    networks:
+      - wiriri_web_internal
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: wiriri-prod-web-node-exporter
+    restart: unless-stopped
+    command: ["--path.rootfs=/host"]
+    pid: host
+    uts: host
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "10.130.18.3:9100:9100"
+
+networks:
+  wiriri_web_internal:
+    name: wiriri_web_internal
+
+# TLS: certbot (webroot). Cert /etc/letsencrypt/live/wiriri.com covers
+# wiriri/www/api/admin/cdn.wiriri.com. Renew via webroot (ACME on :80).

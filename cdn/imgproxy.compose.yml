@@ -1,0 +1,28 @@
+# imgproxy service — ADD to storage-01's /opt/wiriri/docker-compose.yml
+# (merged view in ../storage-01/docker-compose.cdn-proposed.yml).
+# Runs next to MinIO on storage-01; reads originals over localhost; only the
+# private IP port is published (web-01 nginx reaches it). Stateless.
+services:
+  imgproxy:
+    image: darthsim/imgproxy:latest          # pin a version tag before prod
+    container_name: wiriri-prod-imgproxy
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: ":8080"
+      # URL signing (HMAC) — generate: openssl rand -hex 32 (key) / -hex 16 (salt)
+      IMGPROXY_KEY: "${IMGPROXY_KEY}"
+      IMGPROXY_SALT: "${IMGPROXY_SALT}"
+      # Source = MinIO on the same box, via S3 API (path-style)
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: "http://10.130.18.7:9000"
+      IMGPROXY_S3_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "${IMGPROXY_S3_ACCESS_KEY}"     # dedicated READ-ONLY MinIO user
+      AWS_SECRET_ACCESS_KEY: "${IMGPROXY_S3_SECRET_KEY}"
+      # Lock the source to the public images bucket only (no SSRF / arbitrary source)
+      IMGPROXY_ALLOWED_SOURCES: "s3://wiriri-prod-images/"
+      # Safety + delivery
+      IMGPROXY_MAX_SRC_RESOLUTION: "30"        # megapixels — decompression-bomb guard
+      IMGPROXY_STRIP_METADATA: "true"          # strip EXIF/GPS
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"   # serve WebP to browsers that accept it
+    ports:
+      - "10.130.18.7:8080:8080"                # private IP only — reached by web-01 nginx

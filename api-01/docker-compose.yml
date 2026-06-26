@@ -1,0 +1,64 @@
+# wiriri-prod-api-01 (10.130.18.4) — CURRENT live state (captured 2026-06-26).
+# NestJS backend (:4001, reached by web-01 nginx for api.wiriri.com) + Redis + exporters.
+# Backend reads ./backend/.env (Infisical-sourced); never commit real secrets.
+services:
+  redis:
+    image: redis:7
+    container_name: wiriri-prod-redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - wiriri_api_internal
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: wiriri-prod-api-node-exporter
+    restart: unless-stopped
+    command: ["--path.rootfs=/host"]
+    pid: host
+    uts: host
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "10.130.18.4:9100:9100"
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: wiriri-prod-redis-exporter
+    restart: unless-stopped
+    command: ["--redis.addr=redis://redis:6379"]
+    ports:
+      - "10.130.18.4:9121:9121"
+    depends_on:
+      - redis
+    networks:
+      - wiriri_api_internal
+
+  backend:
+    image: ghcr.io/khaledbk/wiriri-backend:prod
+    container_name: wiriri-prod-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - "10.130.18.4:4001:4001"
+    depends_on:
+      - redis
+    networks:
+      - wiriri_api_internal
+
+volumes:
+  redis_data:
+
+networks:
+  wiriri_api_internal:
+    name: wiriri_api_internal
+
+# NOTE (observed): redis/redis.conf has `bind 0.0.0.0` + `protected-mode no`, but the
+# port is published only on 127.0.0.1:6379, so Redis is not VPC-exposed. The original
+# runbook specified bind 127.0.0.1 — worth re-tightening the conf to match. See redis/redis.conf.

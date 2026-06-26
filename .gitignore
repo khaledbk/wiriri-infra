@@ -1,0 +1,12 @@
+# Never commit secrets or live cert/state material
+*.env
+.env
+!*.env.example
+backend/.env
+imgproxy.env
+certbot/conf/
+certbot/www/
+**/minio/data/
+**/cache/
+*.pem
+*.key

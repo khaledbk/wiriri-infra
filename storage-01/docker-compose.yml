@@ -1,0 +1,30 @@
+# wiriri-prod-storage-01 (10.130.18.7) — CURRENT live state (captured 2026-06-26).
+# Secrets are managed out-of-band (Infisical / on-box .env); do not commit real values.
+services:
+  minio:
+    image: quay.io/minio/minio:latest          # live: RELEASE.2025-09-07; pin a tag for prod
+    container_name: wiriri-prod-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "wiriri_minio_admin"
+      MINIO_ROOT_PASSWORD: "***"               # in on-box env, not here
+    volumes:
+      - ./minio/data:/data
+      - ./minio/config:/root/.minio
+    ports:
+      - "10.130.18.7:9000:9000"
+      - "10.130.18.7:9001:9001"
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: wiriri-prod-storage-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    uts: host
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "10.130.18.7:9100:9100"

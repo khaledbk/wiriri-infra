@@ -1,0 +1,50 @@
+# wiriri-prod-storage-01 — PROPOSED (current + imgproxy for the CDN).
+# Diff vs current: adds the `imgproxy` service only. MinIO/node_exporter unchanged.
+# imgproxy reads ${IMGPROXY_*} from an on-box .env (see ../cdn/.env.example).
+services:
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: wiriri-prod-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "wiriri_minio_admin"
+      MINIO_ROOT_PASSWORD: "***"
+    volumes:
+      - ./minio/data:/data
+      - ./minio/config:/root/.minio
+    ports:
+      - "10.130.18.7:9000:9000"
+      - "10.130.18.7:9001:9001"
+
+  # >>> NEW <<<
+  imgproxy:
+    image: darthsim/imgproxy:latest            # pin a version before prod
+    container_name: wiriri-prod-imgproxy
+    restart: unless-stopped
+    env_file:
+      - ./imgproxy.env                          # IMGPROXY_KEY/SALT + read-only S3 creds
+    environment:
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: "http://10.130.18.7:9000"
+      IMGPROXY_S3_REGION: "us-east-1"
+      IMGPROXY_ALLOWED_SOURCES: "s3://wiriri-prod-images/"
+      IMGPROXY_MAX_SRC_RESOLUTION: "30"
+      IMGPROXY_STRIP_METADATA: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+    ports:
+      - "10.130.18.7:8080:8080"                 # private IP only; web-01 nginx reaches it
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: wiriri-prod-storage-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    uts: host
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "10.130.18.7:9100:9100"
