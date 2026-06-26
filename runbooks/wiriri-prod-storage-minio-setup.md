@@ -699,15 +699,18 @@ mc admin user add wiriri wiriri_imgproxy_ro "$(openssl rand -base64 36)"   # sav
 mc admin policy attach wiriri wiriri-imgproxy-ro --user wiriri_imgproxy_ro
 ```
 
-### 22.2 imgproxy service (storage-01)
-Add the `imgproxy` service from `wiriri-infra/storage-01/docker-compose.cdn-proposed.yml`. It reads an
-on-box `imgproxy.env` (see `wiriri-infra/cdn/.env.example`): `IMGPROXY_KEY`/`IMGPROXY_SALT`
-(`openssl rand -hex 32` / `-hex 16`) + the `wiriri_imgproxy_ro` creds. Source-locked to
-`s3://wiriri-prod-images/`, strips EXIF, `MAX_SRC_RESOLUTION=30`. Bound to `10.130.18.7:8080` (private).
+### 22.2 imgproxy service (storage-01) — DONE 2026-06-26
+Deployed as a **standalone** compose (`wiriri-infra/storage-01/docker-compose.imgproxy.yml`, copied to
+`/opt/wiriri/docker-compose.imgproxy.yml`) so it never touches the working MinIO stack. Reads
+`/opt/wiriri/imgproxy.env` (chmod 600): `IMGPROXY_KEY`/`IMGPROXY_SALT` (`openssl rand -hex 32` / `-hex 16`)
++ the `wiriri_imgproxy_ro` creds. Source-locked to `s3://wiriri-prod-images/`, strips EXIF,
+`MAX_SRC_RESOLUTION=30`. Bound to `10.130.18.7:8080` (private).
 
 ```bash
-cd /opt/wiriri && docker compose up -d imgproxy && curl -sI http://10.130.18.7:8080/health
+cd /opt/wiriri && docker compose -f docker-compose.imgproxy.yml up -d
+curl -s http://10.130.18.7:8080/health   # -> 200
 ```
+Validated 2026-06-26: `/health` 200 · signed transform 200 (image) · unsigned 403.
 
 ### 22.3 Firewall
 Add to the storage firewall (only change needed — `:9000` from web-01 is already open):

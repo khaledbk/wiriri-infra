@@ -1,0 +1,23 @@
+# wiriri-prod-storage-01 — imgproxy (LIVE, deployed + validated 2026-06-26).
+# Standalone compose so it never touches the working MinIO stack (docker-compose.yml).
+# Deploy:  cd /opt/wiriri && docker compose -f docker-compose.imgproxy.yml up -d
+# Reads /opt/wiriri/imgproxy.env (chmod 600): IMGPROXY_KEY, IMGPROXY_SALT,
+#   AWS_ACCESS_KEY_ID=wiriri_imgproxy_ro, AWS_SECRET_ACCESS_KEY=***  (NOT committed).
+# Validated: /health 200 · signed transform 200 (image) · unsigned 403.
+services:
+  imgproxy:
+    image: darthsim/imgproxy:latest        # TODO: pin a version tag for prod
+    container_name: wiriri-prod-imgproxy
+    restart: unless-stopped
+    env_file: [./imgproxy.env]
+    environment:
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: "http://10.130.18.7:9000"
+      IMGPROXY_S3_REGION: "us-east-1"
+      IMGPROXY_ALLOWED_SOURCES: "s3://wiriri-prod-images/"   # source-locked
+      IMGPROXY_MAX_SRC_RESOLUTION: "30"                       # MP — decompression-bomb guard
+      IMGPROXY_STRIP_METADATA: "true"                         # strip EXIF/GPS
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+    ports:
+      - "10.130.18.7:8080:8080"            # private IP only; web-01 nginx reaches it
