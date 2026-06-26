@@ -664,3 +664,70 @@ The backend should keep using `wiriri_backend_minio`, not the root user.
 - [ ] Backend Infisical has S3/MinIO env variables
 - [ ] MinIO root password rotated if it was exposed
 - [ ] Backup strategy is defined
+
+### CDN extension checklist (§22)
+- [ ] Read-only imgproxy user `wiriri_imgproxy_ro` + policy (GetObject/ListBucket on images only)
+- [ ] imgproxy container running on `10.130.18.7:8080`
+- [ ] `IMGPROXY_KEY` / `IMGPROXY_SALT` generated and in Infisical (3 stages)
+- [ ] Storage firewall allows `8080` from `10.130.18.3/32` (web-01 edge)
+- [ ] `cdn.wiriri.com` vhost on web-01 serves `/img/*` (imgproxy) + presigned passthrough
+- [ ] Smoke test: signed `/img/` URL → 200 + `X-Cache-Status`; presigned PUT/GET round-trips
+
+---
+
+## 22. CDN extension — imgproxy + `cdn.wiriri.com`  (added 2026-06-26)
+
+> This section extends the MinIO-only runbook above with the **image CDN** layer (decided after
+> the original build). Design: `docs/spec/SPEC-2026-06-26-storage-minio-cdn.md`. Config to apply:
+> `wiriri-infra/cdn/` + `wiriri-infra/storage-01/docker-compose.cdn-proposed.yml` +
+> `wiriri-infra/web-01/nginx/default.conf.cdn-proposed`.
+
+**Why:** MinIO is a pure object store — no on-the-fly resize/WebP (Cloudinary did that). imgproxy
+adds transforms; the existing **web-01 nginx** is the public edge + cache. MinIO/imgproxy stay
+private; only `cdn.wiriri.com` (→ web-01:443) is public.
+
+### 22.1 Read-only MinIO user for imgproxy (do NOT reuse the backend rw user or root)
+
+```bash
+cat > /tmp/wiriri-imgproxy-ro-policy.json <<'POLICY'
+{ "Version": "2012-10-17", "Statement": [
+  { "Effect": "Allow", "Action": ["s3:GetObject","s3:ListBucket"],
+    "Resource": ["arn:aws:s3:::wiriri-prod-images","arn:aws:s3:::wiriri-prod-images/*"] } ] }
+POLICY
+mc admin policy create wiriri wiriri-imgproxy-ro /tmp/wiriri-imgproxy-ro-policy.json
+mc admin user add wiriri wiriri_imgproxy_ro "$(openssl rand -base64 36)"   # save the secret
+mc admin policy attach wiriri wiriri-imgproxy-ro --user wiriri_imgproxy_ro
+```
+
+### 22.2 imgproxy service (storage-01)
+Add the `imgproxy` service from `wiriri-infra/storage-01/docker-compose.cdn-proposed.yml`. It reads an
+on-box `imgproxy.env` (see `wiriri-infra/cdn/.env.example`): `IMGPROXY_KEY`/`IMGPROXY_SALT`
+(`openssl rand -hex 32` / `-hex 16`) + the `wiriri_imgproxy_ro` creds. Source-locked to
+`s3://wiriri-prod-images/`, strips EXIF, `MAX_SRC_RESOLUTION=30`. Bound to `10.130.18.7:8080` (private).
+
+```bash
+cd /opt/wiriri && docker compose up -d imgproxy && curl -sI http://10.130.18.7:8080/health
+```
+
+### 22.3 Firewall
+Add to the storage firewall (only change needed — `:9000` from web-01 is already open):
+
+| Protocol | Port | Source | Purpose |
+|---|---:|---|---|
+| TCP | `8080` | `10.130.18.3/32` | web-01 edge → imgproxy |
+
+### 22.4 Edge (web-01)
+Apply `wiriri-infra/web-01/nginx/default.conf.cdn-proposed` (replaces the cdn stub: adds the cache
+zone + `/img/*`→imgproxy and presigned `/<bucket>/*`→MinIO passthrough), mount `./nginx/cache`,
+then `nginx -t` and reload. TLS already covers `cdn.wiriri.com` (shared `wiriri.com` SAN cert).
+
+### 22.5 Upload/read model (aligns the §1 diagram with the spec)
+- **Public images:** backend mints a **presigned PUT** (signed against `https://cdn.wiriri.com`); the
+  browser uploads direct to MinIO. Reads go through `cdn.wiriri.com/img/...` (imgproxy, cached).
+- **ID/KYC (private):** backend **proxies/streams** (authz + audit) — never presigned to cdn.
+- **Invoices/PDFs:** backend mints a short-TTL **presigned GET** via `cdn.wiriri.com`.
+- DB stores the `FileObject` metadata row (key, not URL) — unchanged from §1.
+
+### 22.6 Monitoring
+Add imgproxy to Prometheus on monitor-01 (it exposes Prometheus metrics when
+`IMGPROXY_PROMETHEUS_BIND` is set, or scrape `:8080/health` for liveness).
