@@ -1,7 +1,8 @@
 # wiriri edge nginx + GeoIP2.
 # Stock nginx:stable has no GeoIP module, so we compile the geoip2 dynamic
-# module against the exact nginx version (--with-compat keeps it ABI-compatible
-# with the official binary), then load it at runtime.
+# module against the EXACT nginx version of the base image (detected at build
+# time, not pinned — so we always match `nginx:stable` and never downgrade the
+# edge). --with-compat keeps the module ABI-compatible with the official binary.
 #
 # Geo DB: DB-IP "IP to Country Lite" — MMDB format (same as MaxMind GeoLite2),
 # free, NO account/license key required, refreshed monthly, CC BY 4.0.
@@ -9,28 +10,28 @@
 # and the cookie policy. The .mmdb is baked at build time and can be hot-swapped
 # on-box via refresh-geoip.sh (auto_reload picks it up).
 
-ARG NGINX_VERSION=1.28.0
 ARG GEOIP2_MODULE_VERSION=3.4
 
-FROM nginx:${NGINX_VERSION} AS build
-ARG NGINX_VERSION
+FROM nginx:stable AS build
 ARG GEOIP2_MODULE_VERSION
 RUN set -eux; \
+    nginx_ver="$(nginx -v 2>&1 | sed 's#.*nginx/##')"; \
+    echo "building geoip2 module against nginx ${nginx_ver}"; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       build-essential ca-certificates wget git \
       libpcre3-dev zlib1g-dev libssl-dev libmaxminddb-dev; \
-    wget -O /tmp/nginx.tar.gz "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"; \
+    wget -O /tmp/nginx.tar.gz "https://nginx.org/download/nginx-${nginx_ver}.tar.gz"; \
     tar -C /tmp -xzf /tmp/nginx.tar.gz; \
     git clone --depth 1 -b "${GEOIP2_MODULE_VERSION}" \
       https://github.com/leev/ngx_http_geoip2_module.git /tmp/geoip2; \
-    cd "/tmp/nginx-${NGINX_VERSION}"; \
+    cd "/tmp/nginx-${nginx_ver}"; \
     ./configure --with-compat --add-dynamic-module=/tmp/geoip2; \
     make modules; \
     mkdir -p /out; \
     cp objs/ngx_http_geoip2_module.so /out/
 
-FROM nginx:${NGINX_VERSION}
+FROM nginx:stable
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends libmaxminddb0 ca-certificates wget; \
