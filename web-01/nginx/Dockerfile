@@ -20,7 +20,7 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       build-essential ca-certificates wget git \
-      libpcre3-dev zlib1g-dev libssl-dev libmaxminddb-dev; \
+      libpcre2-dev zlib1g-dev libssl-dev libmaxminddb-dev; \
     wget -O /tmp/nginx.tar.gz "https://nginx.org/download/nginx-${nginx_ver}.tar.gz"; \
     tar -C /tmp -xzf /tmp/nginx.tar.gz; \
     git clone --depth 1 -b "${GEOIP2_MODULE_VERSION}" \
