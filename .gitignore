@@ -10,3 +10,7 @@ certbot/www/
 **/cache/
 *.pem
 *.key
+
+# GeoIP DB (regenerated from DB-IP Lite at build/refresh; not source)
+*.mmdb
+web-01/nginx/geoip/

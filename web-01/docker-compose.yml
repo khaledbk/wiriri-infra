@@ -3,16 +3,25 @@
 # For the CDN, also mount a cache dir (see the >>> line) when adopting default.conf.cdn-proposed.
 services:
   nginx:
-    image: nginx:stable
+    # Custom build = stock nginx + compiled geoip2 module + baked DB-IP Lite DB
+    # (see nginx/Dockerfile). Needed for the edge GeoIP2 -> X-Geo-EEA consent
+    # signal. Rebuild on deploy: docker compose build nginx && up -d nginx.
+    build:
+      context: ./nginx
+    image: wiriri-prod-nginx:geoip
     container_name: wiriri-prod-nginx
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
+      # Optional: host-mount the geo DB to refresh it monthly without a rebuild
+      # (refresh-geoip.sh writes here; geoip2 auto_reload picks it up).
+      # - ./nginx/geoip:/etc/nginx/geoip
       # >>> ADD for the CDN cache when using default.conf.cdn-proposed:
       # - ./nginx/cache:/var/cache/nginx
     depends_on:
