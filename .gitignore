@@ -14,3 +14,6 @@ certbot/www/
 # GeoIP DB (regenerated from DB-IP Lite at build/refresh; not source)
 *.mmdb
 web-01/nginx/geoip/
+
+# On-box config backups / live snapshots (state, not source)
+backups/
