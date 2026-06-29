@@ -293,7 +293,7 @@ Source of truth for all secrets — **3 stages: dev / staging / prod**. Nothing 
 | admin | admin runtime config |
 
 On-box, `get-env.sh` materializes the stage's secrets into `./*/.env` (chmod 600) before
-`docker compose up`.
+`docker compose up`. **Per-VPS variable usage (names, not values):** [`ENV-REFERENCE.md`](ENV-REFERENCE.md).
 
 ---
 
