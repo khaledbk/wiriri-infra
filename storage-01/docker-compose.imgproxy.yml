@@ -19,5 +19,6 @@ services:
       IMGPROXY_MAX_SRC_RESOLUTION: "30"                       # MP — decompression-bomb guard
       IMGPROXY_STRIP_METADATA: "true"                         # strip EXIF/GPS
       IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+      IMGPROXY_ENABLE_AVIF_DETECTION: "true"
     ports:
       - "10.130.18.7:8080:8080"            # private IP only; web-01 nginx reaches it

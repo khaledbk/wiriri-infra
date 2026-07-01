@@ -151,7 +151,7 @@ VPC IP; allow `:5432` only from api-01 (`10.130.18.4/32`). `postgres_exporter` e
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | imgproxy → MinIO read-only account (`wiriri_imgproxy_ro`) |
 | `IMGPROXY_BIND` / `IMGPROXY_USE_S3` / `IMGPROXY_S3_ENDPOINT` / `IMGPROXY_S3_REGION` | imgproxy ↔ MinIO wiring |
 | `IMGPROXY_ALLOWED_SOURCES` | Source-lock to `s3://wiriri-prod-images/` |
-| `IMGPROXY_MAX_SRC_RESOLUTION` / `IMGPROXY_STRIP_METADATA` / `IMGPROXY_ENABLE_WEBP_DETECTION` | Decompression-bomb guard · EXIF strip · WebP |
+| `IMGPROXY_MAX_SRC_RESOLUTION` / `IMGPROXY_STRIP_METADATA` / `IMGPROXY_ENABLE_WEBP_DETECTION` / `IMGPROXY_ENABLE_AVIF_DETECTION` | Decompression-bomb guard · EXIF strip · WebP |
 
 Both bind the private IP; the only public path in is `cdn.wiriri.com` via web-01 nginx.
 
@@ -175,3 +175,6 @@ Prometheus scrape targets are in `prometheus.yml` (not env): node-exporter `:910
 - Keys mirror across **dev/staging/prod**; prod may add a few. `get-env.sh` writes `./*/.env`
   (chmod 600) on the box before `docker compose up`.
 - After changing a secret, the consuming container must be **recreated** to pick it up.
+
+
+> **2026-07-01 (CA):** enabled imgproxy AVIF detection; made the CDN nginx `/img/` cache **format-aware** (`map $http_accept → cache key`) + `Vary: Accept`. ⚠️ Auto WebP/AVIF still blocked by the **app-built imgproxy URL forcing `format=jpeg`** (see imgproxy log `processing_options.format="jpeg"`); the URL-builder fix (webapp/backend, re-sign) unlocks both. Until then the CDN serves JPEG.
